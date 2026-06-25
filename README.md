@@ -1,14 +1,17 @@
-# EconoMy 0.2.1 Fixed
+# EconoMy Complete Base v0.3
 
-Versión corregida del prototipo mobile.
+Versión jugable grande y expandible.
 
-Cambios:
-- El mapa se dibuja correctamente.
-- Los edificios ahora son elementos HTML, más estables en móvil.
-- Rutas arrastrables.
-- Vehículos animados.
-- Mejoras de producción, transporte, mercado y almacén.
-- Guardado local.
-- Cache busting en `game.js?v=021`.
+Incluye mapa expandible, niveles ilimitados, edificios desbloqueables, rutas, vehículos, mejoras, guardado automático y cadenas de producción: maíz, harina, tomate, salsa, leche, queso, pan y pizza.
 
-Si GitHub Pages sigue mostrando la versión vieja, borrar caché o abrir en modo incógnito.
+## Cómo jugar
+
+1. Usá Rutas para conectar edificios.
+2. Vendé recursos en el mercado.
+3. Ganá XP y subí de nivel.
+4. Construí edificios nuevos.
+5. Expandí el mapa.
+
+## GitHub Pages
+
+Subí `index.html`, `style.css`, `game.js`, `manifest.json` y `README.md` al repo.
