@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini State Builder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Juego online</p>
+      <h1>Mini State Builder</h1>
+      <p>Construí una pequeña ciudad, generá recursos y desbloqueá mejoras.</p>
+    </div>
+    <div class="save-box">
+      <span id="saveStatus">Partida lista</span>
+      <button id="saveBtn">Guardar</button>
+      <button id="resetBtn" class="danger">Reiniciar</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel stats-panel">
+      <h2>Recursos</h2>
+      <div class="stats-grid">
+        <article>
+          <span>Dinero</span>
+          <strong id="money">$0</strong>
+          <small id="moneyRate">+0/s</small>
+        </article>
+        <article>
+          <span>Población</span>
+          <strong id="population">0</strong>
+          <small id="populationRate">+0/s</small>
+        </article>
+        <article>
+          <span>Comida</span>
+          <strong id="food">0</strong>
+          <small id="foodRate">+0/s</small>
+        </article>
+        <article>
+          <span>Energía</span>
+          <strong id="energy">0</strong>
+          <small id="energyRate">+0/s</small>
+        </article>
+        <article>
+          <span>Materiales</span>
+          <strong id="materials">0</strong>
+          <small id="materialsRate">+0/s</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>Ciudad</h2>
+        <span id="cityLevel">Nivel 1</span>
+      </div>
+      <div class="city-map" id="cityMap"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Construcciones</h2>
+      <div id="buildingsList" class="cards"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Mejoras</h2>
+      <div id="upgradesList" class="cards"></div>
+    </section>
+
+    <section class="panel log-panel">
+      <h2>Registro</h2>
+      <div id="log"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Hecho para jugar online desde GitHub Pages.</p>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
