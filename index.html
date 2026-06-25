@@ -3,68 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EconoMy - Prototipo</title>
+  <title>EconoMy - Map Prototype</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <div>
-      <p class="tag">Prototipo jugable</p>
-      <h1>EconoMy</h1>
-      <p>Producí maíz, tomates y leche. Vendé recursos básicos mientras armamos la cadena económica.</p>
-    </div>
-    <div class="money-box">
-      <span>Dinero</span>
-      <strong id="money">$0</strong>
-      <small id="income">+$0/s</small>
-    </div>
-  </header>
+  <div id="app">
+    <header class="topbar">
+      <button id="clearRoutes" title="Borrar rutas">⚙️</button>
+      <div class="counter"><span>💰</span><strong id="money">0</strong></div>
+      <div class="counter"><span>🌽</span><strong id="corn">0</strong></div>
+      <div class="counter"><span>🍅</span><strong id="tomato">0</strong></div>
+      <div class="counter"><span>🥛</span><strong id="milk">0</strong></div>
+    </header>
 
-  <main>
-    <section class="board" id="board">
-      <article class="building corn" data-resource="corn">
-        <div class="icon">🌽</div>
-        <h2>Plantación de maíz</h2>
-        <p>Produce maíz cada pocos segundos.</p>
-        <div class="bar"><span id="cornBar"></span></div>
-        <div class="stock">Stock: <strong id="cornStock">0</strong></div>
-        <button id="sellCorn">Vender maíz · $2</button>
-      </article>
+    <main class="game-wrap">
+      <canvas id="game" width="900" height="1400"></canvas>
 
-      <article class="building tomato" data-resource="tomato">
-        <div class="icon">🍅</div>
-        <h2>Granja de tomates</h2>
-        <p>Produce tomates para futura salsa.</p>
-        <div class="bar"><span id="tomatoBar"></span></div>
-        <div class="stock">Stock: <strong id="tomatoStock">0</strong></div>
-        <button id="sellTomato">Vender tomate · $3</button>
-      </article>
-
-      <article class="building milk" data-resource="milk">
-        <div class="icon">🥛</div>
-        <h2>Tambo</h2>
-        <p>Produce leche para futuro queso.</p>
-        <div class="bar"><span id="milkBar"></span></div>
-        <div class="stock">Stock: <strong id="milkStock">0</strong></div>
-        <button id="sellMilk">Vender leche · $4</button>
-      </article>
-    </section>
-
-    <section class="panel">
-      <h2>Producción actual</h2>
-      <div class="resource-grid">
-        <div><span>🌽 Maíz</span><strong id="cornInfo">0</strong></div>
-        <div><span>🍅 Tomates</span><strong id="tomatoInfo">0</strong></div>
-        <div><span>🥛 Leche</span><strong id="milkInfo">0</strong></div>
+      <div class="help">
+        <strong>EconoMy</strong>
+        <span>Arrastrá desde una fábrica al mercado para vender.</span>
       </div>
-      <p class="hint">Cada edificio produce solo. Cuando junta stock, podés venderlo. Después agregamos molino, salsa, queso y pizza 🍕</p>
-    </section>
+    </main>
 
-    <section class="panel">
-      <h2>Registro</h2>
-      <div id="log"></div>
-    </section>
-  </main>
+    <footer class="bottom">
+      <button class="tab active">🏦 Mercado</button>
+      <button class="tab">🛣 Rutas</button>
+      <button class="tab">📦 Stock</button>
+      <button class="tab">⬆️ Mejoras</button>
+    </footer>
+  </div>
 
   <script src="game.js"></script>
 </body>

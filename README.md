@@ -1,35 +1,35 @@
-# EconoMy - Prototipo
+# EconoMy - Map Prototype
 
-Primer prototipo visual del juego.
+Prototipo visual tipo mapa, inspirado en juegos de producción con rutas.
 
-Tiene tres edificios:
+## Qué tiene
 
-- Plantación de maíz
-- Granja de tomates
-- Tambo
+- Mapa 2D estilo isla.
+- Tres productores:
+  - Plantación de maíz
+  - Granja de tomates
+  - Tambo
+- Mercado central.
+- Rutas arrastrables: arrastrá desde un edificio hasta el mercado.
+- Recursos animados viajando por las rutas.
+- Dinero al vender recursos.
 
-Cada edificio produce automáticamente un recurso. Cuando hay stock, se puede vender.
-
-## Para probarlo
+## Cómo probar
 
 Abrí `index.html` en el navegador.
 
-## Para publicarlo en GitHub Pages
+## Cómo subir a GitHub Pages
 
-1. Crear un repositorio nuevo.
-2. Subir estos archivos:
-   - `index.html`
-   - `style.css`
-   - `game.js`
-3. Entrar a Settings > Pages.
-4. Elegir rama `main` y carpeta `/root`.
+1. Crear repo nuevo.
+2. Subir `index.html`, `style.css`, `game.js` y este README.
+3. Ir a Settings > Pages.
+4. Seleccionar rama `main` y carpeta `/root`.
 5. Guardar.
 
-## Próximo paso sugerido
+## Próximos pasos
 
-Agregar edificios de transformación:
-
-- Molino: maíz → harina
-- Cocina de salsa: tomates → salsa
-- Industria láctea: leche → queso
-- Pizzería: harina + salsa + queso → pizza
+- Molino: maíz → harina.
+- Cocina: tomate → salsa.
+- Quesería: leche → queso.
+- Pizzería: harina + salsa + queso → pizza.
+- Mejoras y desbloqueo de mapa.
