@@ -1,33 +1,35 @@
-# Mini State Builder
+# EconoMy - Prototipo
 
-Juego web simple estilo builder/city builder hecho con HTML, CSS y JavaScript.
+Primer prototipo visual del juego.
 
-## Cómo publicarlo en GitHub Pages
+Tiene tres edificios:
 
-1. Crear un repositorio nuevo en GitHub.
+- Plantación de maíz
+- Granja de tomates
+- Tambo
+
+Cada edificio produce automáticamente un recurso. Cuando hay stock, se puede vender.
+
+## Para probarlo
+
+Abrí `index.html` en el navegador.
+
+## Para publicarlo en GitHub Pages
+
+1. Crear un repositorio nuevo.
 2. Subir estos archivos:
    - `index.html`
    - `style.css`
    - `game.js`
-3. Entrar al repositorio en GitHub.
-4. Ir a **Settings > Pages**.
-5. En **Branch**, elegir `main` y carpeta `/root`.
-6. Guardar.
-7. GitHub te va a dar un link público para jugar online.
+3. Entrar a Settings > Pages.
+4. Elegir rama `main` y carpeta `/root`.
+5. Guardar.
 
-## Qué tiene esta versión
+## Próximo paso sugerido
 
-- Recursos: dinero, población, comida, energía y materiales.
-- Construcciones: casas, granjas, talleres, centrales y mercados.
-- Mejoras desbloqueables.
-- Guardado automático en el navegador.
-- Diseño adaptable para celular y PC.
+Agregar edificios de transformación:
 
-## Próximas ideas
-
-- Misiones.
-- Enemigos o eventos aleatorios.
-- Mapa más grande.
-- Edificios desbloqueables por nivel.
-- Sonidos.
-- Exportar/importar partida.
+- Molino: maíz → harina
+- Cocina de salsa: tomates → salsa
+- Industria láctea: leche → queso
+- Pizzería: harina + salsa + queso → pizza
