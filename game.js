@@ -1,8 +1,7 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-const SAVE_KEY = "economy-mobile-v01";
-
+const SAVE_KEY = "economy-mobile-v02";
 const world = { w: 460, h: 920 };
 
 const buildings = [
@@ -16,7 +15,7 @@ const buildings = [
     y: 330,
     stock: 0,
     capacity: 20,
-    produceEvery: 2.0,
+    baseProduceEvery: 2.0,
     produceTimer: 0,
     resource: "corn"
   },
@@ -46,22 +45,111 @@ const buildings = [
   }
 ];
 
+const upgrades = {
+  production: {
+    id: "production",
+    title: "🌽 Producción de maíz",
+    description: "La plantación produce más rápido.",
+    level: 0,
+    max: 5,
+    baseCost: 20,
+    costGrowth: 1.75
+  },
+  transport: {
+    id: "transport",
+    title: "🚚 Transporte",
+    description: "Los vehículos viajan más rápido y pueden salir más a la vez.",
+    level: 0,
+    max: 5,
+    baseCost: 25,
+    costGrowth: 1.8
+  },
+  market: {
+    id: "market",
+    title: "🏪 Precio del mercado",
+    description: "El mercado paga más por cada maíz.",
+    level: 0,
+    max: 5,
+    baseCost: 30,
+    costGrowth: 2
+  },
+  storage: {
+    id: "storage",
+    title: "📦 Capacidad del depósito",
+    description: "El depósito puede guardar más maíz.",
+    level: 0,
+    max: 5,
+    baseCost: 18,
+    costGrowth: 1.65
+  }
+};
+
 const state = {
   money: 0,
+  xp: 180,
   routes: [],
   vehicles: [],
   selected: null,
   drag: null,
   floatingTexts: [],
-  lastTime: performance.now()
+  lastTime: performance.now(),
+  activeTab: "market"
 };
 
 loadGame();
+applyUpgradeEffects();
+
+function getProductionSeconds() {
+  return Math.max(0.55, 2.0 - upgrades.production.level * 0.25);
+}
+
+function getMarketPrice() {
+  return 2 + upgrades.market.level;
+}
+
+function getVehicleSpeed(routeTo) {
+  const base = routeTo === "market" ? 0.26 : 0.24;
+  return base + upgrades.transport.level * 0.045;
+}
+
+function getMaxVehiclesPerRoute() {
+  return 2 + Math.floor((upgrades.transport.level + 1) / 2);
+}
+
+function getUpgradeCost(upgrade) {
+  return Math.floor(upgrade.baseCost * Math.pow(upgrade.costGrowth, upgrade.level));
+}
+
+function applyUpgradeEffects() {
+  const depot = getBuilding("depot");
+  depot.capacity = 100 + upgrades.storage.level * 60;
+}
+
+function buyUpgrade(id) {
+  const upgrade = upgrades[id];
+  if (!upgrade || upgrade.level >= upgrade.max) return;
+
+  const cost = getUpgradeCost(upgrade);
+  if (state.money < cost) {
+    showToast("Faltan monedas");
+    return;
+  }
+
+  state.money -= cost;
+  upgrade.level++;
+  applyUpgradeEffects();
+  addFloat("MEJORA ↑", 230, 215);
+  showToast(`${upgrade.title} nivel ${upgrade.level}`);
+  saveGame();
+  renderUpgradePanel();
+}
 
 function saveGame() {
   const data = {
     money: state.money,
+    xp: state.xp,
     routes: state.routes,
+    upgrades: Object.fromEntries(Object.entries(upgrades).map(([key, u]) => [key, u.level])),
     buildings: buildings.map(b => ({ id: b.id, stock: b.stock }))
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -71,7 +159,13 @@ function loadGame() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
     if (typeof saved.money === "number") state.money = saved.money;
+    if (typeof saved.xp === "number") state.xp = saved.xp;
     if (Array.isArray(saved.routes)) state.routes = saved.routes;
+    if (saved.upgrades) {
+      for (const [key, level] of Object.entries(saved.upgrades)) {
+        if (upgrades[key] && typeof level === "number") upgrades[key].level = Math.min(level, upgrades[key].max);
+      }
+    }
     if (Array.isArray(saved.buildings)) {
       for (const item of saved.buildings) {
         const b = buildings.find(x => x.id === item.id);
@@ -83,17 +177,76 @@ function loadGame() {
 
 function resetGame() {
   state.money = 0;
+  state.xp = 180;
   state.routes = [];
   state.vehicles = [];
+  for (const key of Object.keys(upgrades)) upgrades[key].level = 0;
   for (const b of buildings) {
     b.stock = 0;
     b.produceTimer = 0;
   }
+  applyUpgradeEffects();
   saveGame();
+  renderUpgradePanel();
   showToast("Partida reiniciada");
 }
 
 document.getElementById("menuBtn").addEventListener("click", resetGame);
+document.getElementById("closeUpgrades").addEventListener("click", () => setActiveTab("market"));
+document.getElementById("marketTab").addEventListener("click", () => setActiveTab("market"));
+document.getElementById("routesTab").addEventListener("click", () => setActiveTab("routes"));
+document.getElementById("upgradesTab").addEventListener("click", () => setActiveTab("upgrades"));
+document.getElementById("storageTab").addEventListener("click", () => setActiveTab("storage"));
+
+function setActiveTab(tab) {
+  state.activeTab = tab;
+  for (const btn of document.querySelectorAll(".tab")) btn.classList.remove("active");
+
+  const map = {
+    market: "marketTab",
+    routes: "routesTab",
+    upgrades: "upgradesTab",
+    storage: "storageTab"
+  };
+  document.getElementById(map[tab]).classList.add("active");
+
+  document.getElementById("upgradePanel").classList.toggle("hidden", tab !== "upgrades");
+
+  if (tab === "routes") showToast("Arrastrá edificio → destino");
+  if (tab === "storage") {
+    state.selected = "depot";
+    showToast("Depósito seleccionado");
+  }
+  if (tab === "market") {
+    state.selected = "market";
+    showToast(`Precio actual: ${getMarketPrice()} 🪙`);
+  }
+
+  renderUpgradePanel();
+}
+
+function renderUpgradePanel() {
+  const list = document.getElementById("upgradeList");
+  list.innerHTML = "";
+
+  for (const upgrade of Object.values(upgrades)) {
+    const cost = getUpgradeCost(upgrade);
+    const maxed = upgrade.level >= upgrade.max;
+    const canBuy = state.money >= cost && !maxed;
+
+    const card = document.createElement("article");
+    card.className = "upgrade-card";
+    card.innerHTML = `
+      <h3>${upgrade.title} · Nivel ${upgrade.level}/${upgrade.max}</h3>
+      <p>${upgrade.description}</p>
+      <button ${canBuy ? "" : "disabled"}>
+        ${maxed ? "Máximo" : `Mejorar por ${cost} 🪙`}
+      </button>
+    `;
+    card.querySelector("button").addEventListener("click", () => buyUpgrade(upgrade.id));
+    list.appendChild(card);
+  }
+}
 
 function resize() {
   const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
@@ -127,7 +280,7 @@ function updateProduction(dt) {
   if (!hasOutput && !canStore) return;
 
   farm.produceTimer += dt;
-  if (farm.produceTimer >= farm.produceEvery) {
+  if (farm.produceTimer >= getProductionSeconds()) {
     farm.produceTimer = 0;
 
     if (hasOutput) {
@@ -151,9 +304,11 @@ function updateTransport(dt) {
     const to = getBuilding(v.to);
 
     if (to.kind === "market") {
-      state.money += 2;
-      addFloat("+2 🪙", to.x, to.y - 95);
-      showToast("Maíz vendido +2");
+      const price = getMarketPrice();
+      state.money += price;
+      state.xp += 2;
+      addFloat(`+${price} 🪙`, to.x, to.y - 95);
+      showToast(`Maíz vendido +${price}`);
     } else if (to.kind === "storage") {
       if (to.stock < to.capacity) {
         to.stock++;
@@ -178,7 +333,7 @@ function dispatchFromStorage(storageId) {
   if (storage.stock <= 0) return;
 
   const alreadyOnRoute = state.vehicles.filter(v => v.from === storageId).length;
-  if (alreadyOnRoute >= 2) return;
+  if (alreadyOnRoute >= getMaxVehiclesPerRoute()) return;
 
   storage.stock--;
   state.vehicles.push({
@@ -186,7 +341,7 @@ function dispatchFromStorage(storageId) {
     to: route.to,
     resource: "corn",
     t: 0,
-    speed: 0.22
+    speed: getVehicleSpeed(route.to)
   });
 }
 
@@ -206,7 +361,7 @@ function spawnVehicleFromRoute(fromId) {
   }
 
   const alreadyOnRoute = state.vehicles.filter(v => v.from === fromId).length;
-  if (alreadyOnRoute >= 2) {
+  if (alreadyOnRoute >= getMaxVehiclesPerRoute()) {
     const farm = getBuilding(fromId);
     if (farm.stock < farm.capacity) farm.stock++;
     return;
@@ -217,7 +372,7 @@ function spawnVehicleFromRoute(fromId) {
     to: route.to,
     resource: "corn",
     t: 0,
-    speed: route.to === "market" ? 0.26 : 0.24
+    speed: getVehicleSpeed(route.to)
   });
 }
 
@@ -231,9 +386,10 @@ function updateFloatingTexts(dt) {
 
 function updateUI() {
   document.getElementById("money").textContent = state.money;
+  document.getElementById("xpText").textContent = `${state.xp} / 500`;
 
   const panel = document.getElementById("selectedPanel");
-  if (!state.selected) {
+  if (!state.selected || state.activeTab === "upgrades") {
     panel.classList.add("hidden");
     return;
   }
@@ -244,11 +400,11 @@ function updateUI() {
 
   let details = "";
   if (b.kind === "producer") {
-    details = `<p>Stock: <b>${b.stock} / ${b.capacity}</b></p><p>Produce: <b>+1 maíz cada 2s</b></p>`;
+    details = `<p>Stock: <b>${b.stock} / ${b.capacity}</b></p><p>Produce: <b>+1 maíz cada ${getProductionSeconds().toFixed(2)}s</b></p><p>Mejora producción para acelerar.</p>`;
   } else if (b.kind === "storage") {
-    details = `<p>Almacenado: <b>${b.stock} / ${b.capacity}</b></p><p>Sirve para guardar y enviar al mercado.</p>`;
+    details = `<p>Almacenado: <b>${b.stock} / ${b.capacity}</b></p><p>Transporte: <b>${getMaxVehiclesPerRoute()} vehículos por ruta</b></p><p>Mejorá almacén y transporte.</p>`;
   } else {
-    details = `<p>Compra: <b>2 monedas por maíz</b></p><p>Conectá rutas para vender automático.</p>`;
+    details = `<p>Compra: <b>${getMarketPrice()} monedas por maíz</b></p><p>Mejorá el mercado para vender más caro.</p>`;
   }
   document.getElementById("selectedData").innerHTML = details;
 }
@@ -450,7 +606,7 @@ function drawBuildingBubble(b) {
 
   ctx.font = "bold 21px system-ui";
   if (b.kind === "market") {
-    ctx.fillText("Compra: 2 🪙", b.x, y + 58);
+    ctx.fillText(`Compra: ${getMarketPrice()} 🪙`, b.x, y + 58);
   } else {
     ctx.fillText(`${b.stock} / ${b.capacity}`, b.x, y + 56);
   }
@@ -515,6 +671,8 @@ function hitBuilding(x, y) {
 }
 
 canvas.addEventListener("pointerdown", e => {
+  if (state.activeTab === "upgrades") return;
+
   const p = getPointer(e);
   const b = hitBuilding(p.x, p.y);
 
@@ -585,5 +743,6 @@ function smooth(t) {
   return t * t * (3 - 2 * t);
 }
 
+renderUpgradePanel();
 setInterval(saveGame, 10000);
 requestAnimationFrame(loop);
