@@ -1,430 +1,589 @@
-const canvas = document.getElementById("game");
+const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-const world = {
-  width: 900,
-  height: 1400
-};
+const SAVE_KEY = "economy-mobile-v01";
 
-const state = {
-  money: 0,
-  stock: {
-    corn: 0,
-    tomato: 0,
-    milk: 0
-  },
-  routes: [],
-  packets: [],
-  drag: null,
-  message: "Arrastrá desde un edificio al mercado"
-};
-
-const resources = {
-  corn: { icon: "🌽", price: 2, color: "#facc15", label: "Maíz" },
-  tomato: { icon: "🍅", price: 3, color: "#ef4444", label: "Tomate" },
-  milk: { icon: "🥛", price: 4, color: "#dbeafe", label: "Leche" }
-};
+const world = { w: 460, h: 920 };
 
 const buildings = [
   {
-    id: "cornFarm",
-    type: "producer",
-    name: "Maíz",
-    resource: "corn",
+    id: "farm",
+    name: "Plantación de Maíz",
+    short: "Maíz",
+    kind: "producer",
     icon: "🌽",
+    x: 135,
+    y: 330,
+    stock: 0,
+    capacity: 20,
+    produceEvery: 2.0,
+    produceTimer: 0,
+    resource: "corn"
+  },
+  {
+    id: "depot",
+    name: "Depósito",
+    short: "Depósito",
+    kind: "storage",
+    icon: "📦",
     x: 230,
-    y: 430,
-    produceEvery: 2100,
-    lastProduced: 0
-  },
-  {
-    id: "tomatoFarm",
-    type: "producer",
-    name: "Tomates",
-    resource: "tomato",
-    icon: "🍅",
-    x: 600,
-    y: 500,
-    produceEvery: 2800,
-    lastProduced: 0
-  },
-  {
-    id: "dairy",
-    type: "producer",
-    name: "Tambo",
-    resource: "milk",
-    icon: "🥛",
-    x: 315,
-    y: 790,
-    produceEvery: 3500,
-    lastProduced: 0
+    y: 560,
+    stock: 0,
+    capacity: 100,
+    resource: "corn"
   },
   {
     id: "market",
-    type: "market",
     name: "Mercado",
-    icon: "🏦",
-    x: 485,
-    y: 685
+    short: "Mercado",
+    kind: "market",
+    icon: "🏪",
+    x: 335,
+    y: 330,
+    stock: 0,
+    capacity: 9999,
+    resource: "corn"
   }
 ];
 
-const hexes = [
-  [155, 365, "land"], [300, 365, "land"], [445, 365, "snow"], [590, 365, "snow"], [735, 365, "blocked"],
-  [85, 490, "land"], [230, 490, "land"], [375, 490, "land"], [520, 490, "land"], [665, 490, "snow"],
-  [155, 615, "land"], [300, 615, "land"], [445, 615, "land"], [590, 615, "land"], [735, 615, "blocked"],
-  [85, 740, "waterEdge"], [230, 740, "land"], [375, 740, "land"], [520, 740, "land"], [665, 740, "land"],
-  [155, 865, "blocked"], [300, 865, "land"], [445, 865, "land"], [590, 865, "land"], [735, 865, "blocked"],
-  [230, 990, "blocked"], [375, 990, "blocked"], [520, 990, "blocked"], [665, 990, "blocked"]
-];
+const state = {
+  money: 0,
+  routes: [],
+  vehicles: [],
+  selected: null,
+  drag: null,
+  floatingTexts: [],
+  lastTime: performance.now()
+};
 
-let lastFrame = performance.now();
+loadGame();
 
-function resizeCanvasForDevice() {
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = world.width;
-  canvas.height = world.height;
-}
-
-function hexPath(x, y, r = 93) {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = Math.PI / 180 * (60 * i + 30);
-    const px = x + r * Math.cos(angle);
-    const py = y + r * Math.sin(angle);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-}
-
-function drawHex(x, y, kind) {
-  const colors = {
-    land: ["#4ade3e", "#3ed436"],
-    snow: ["#dfe5ff", "#cfd8ff"],
-    blocked: ["#404045", "#34343a"],
-    waterEdge: ["#31d456", "#28c14c"]
+function saveGame() {
+  const data = {
+    money: state.money,
+    routes: state.routes,
+    buildings: buildings.map(b => ({ id: b.id, stock: b.stock }))
   };
+  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+}
 
-  const [fill, stroke] = colors[kind] || colors.land;
-  hexPath(x, y);
-  ctx.fillStyle = fill;
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = kind === "blocked" ? "#5b5b62" : "#e5ffff";
-  ctx.stroke();
+function loadGame() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
+    if (typeof saved.money === "number") state.money = saved.money;
+    if (Array.isArray(saved.routes)) state.routes = saved.routes;
+    if (Array.isArray(saved.buildings)) {
+      for (const item of saved.buildings) {
+        const b = buildings.find(x => x.id === item.id);
+        if (b && typeof item.stock === "number") b.stock = item.stock;
+      }
+    }
+  } catch {}
+}
 
-  if (kind === "snow") {
-    ctx.font = "34px system-ui";
-    ctx.fillText("❄️", x - 20, y + 12);
+function resetGame() {
+  state.money = 0;
+  state.routes = [];
+  state.vehicles = [];
+  for (const b of buildings) {
+    b.stock = 0;
+    b.produceTimer = 0;
+  }
+  saveGame();
+  showToast("Partida reiniciada");
+}
+
+document.getElementById("menuBtn").addEventListener("click", resetGame);
+
+function resize() {
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  canvas.width = world.w * dpr;
+  canvas.height = world.h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener("resize", resize);
+
+function loop(now) {
+  const dt = Math.min((now - state.lastTime) / 1000, 0.05);
+  state.lastTime = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  updateProduction(dt);
+  updateTransport(dt);
+  updateFloatingTexts(dt);
+  updateUI();
+}
+
+function updateProduction(dt) {
+  const farm = getBuilding("farm");
+  const hasOutput = state.routes.some(r => r.from === "farm");
+  const canStore = farm.stock < farm.capacity;
+
+  if (!hasOutput && !canStore) return;
+
+  farm.produceTimer += dt;
+  if (farm.produceTimer >= farm.produceEvery) {
+    farm.produceTimer = 0;
+
+    if (hasOutput) {
+      spawnVehicleFromRoute("farm");
+    } else if (canStore) {
+      farm.stock++;
+      addFloat("+1 🌽", farm.x, farm.y - 80);
+    }
   }
 }
 
-function drawWater() {
-  const g = ctx.createLinearGradient(0, 0, 0, world.height);
-  g.addColorStop(0, "#15c9ce");
-  g.addColorStop(1, "#0879a7");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, world.width, world.height);
+function updateTransport(dt) {
+  for (const v of state.vehicles) {
+    v.t += dt * v.speed;
+  }
 
-  ctx.globalAlpha = .12;
-  for (let i = 0; i < 18; i++) {
+  const arrived = state.vehicles.filter(v => v.t >= 1);
+  state.vehicles = state.vehicles.filter(v => v.t < 1);
+
+  for (const v of arrived) {
+    const to = getBuilding(v.to);
+
+    if (to.kind === "market") {
+      state.money += 2;
+      addFloat("+2 🪙", to.x, to.y - 95);
+      showToast("Maíz vendido +2");
+    } else if (to.kind === "storage") {
+      if (to.stock < to.capacity) {
+        to.stock++;
+        addFloat("+1 🌽", to.x, to.y - 95);
+      }
+    }
+
+    if (to.kind === "storage") {
+      dispatchFromStorage(to.id);
+    }
+  }
+
+  for (const route of state.routes) {
+    if (route.from === "depot") dispatchFromStorage("depot");
+  }
+}
+
+function dispatchFromStorage(storageId) {
+  const storage = getBuilding(storageId);
+  const route = state.routes.find(r => r.from === storageId);
+  if (!route) return;
+  if (storage.stock <= 0) return;
+
+  const alreadyOnRoute = state.vehicles.filter(v => v.from === storageId).length;
+  if (alreadyOnRoute >= 2) return;
+
+  storage.stock--;
+  state.vehicles.push({
+    from: route.from,
+    to: route.to,
+    resource: "corn",
+    t: 0,
+    speed: 0.22
+  });
+}
+
+function spawnVehicleFromRoute(fromId) {
+  const route = state.routes.find(r => r.from === fromId);
+  if (!route) {
+    const from = getBuilding(fromId);
+    if (from.stock < from.capacity) from.stock++;
+    return;
+  }
+
+  const target = getBuilding(route.to);
+  if (target.kind === "storage" && target.stock >= target.capacity) {
+    const farm = getBuilding(fromId);
+    if (farm.stock < farm.capacity) farm.stock++;
+    return;
+  }
+
+  const alreadyOnRoute = state.vehicles.filter(v => v.from === fromId).length;
+  if (alreadyOnRoute >= 2) {
+    const farm = getBuilding(fromId);
+    if (farm.stock < farm.capacity) farm.stock++;
+    return;
+  }
+
+  state.vehicles.push({
+    from: route.from,
+    to: route.to,
+    resource: "corn",
+    t: 0,
+    speed: route.to === "market" ? 0.26 : 0.24
+  });
+}
+
+function updateFloatingTexts(dt) {
+  for (const f of state.floatingTexts) {
+    f.life -= dt;
+    f.y -= dt * 28;
+  }
+  state.floatingTexts = state.floatingTexts.filter(f => f.life > 0);
+}
+
+function updateUI() {
+  document.getElementById("money").textContent = state.money;
+
+  const panel = document.getElementById("selectedPanel");
+  if (!state.selected) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const b = getBuilding(state.selected);
+  panel.classList.remove("hidden");
+  document.getElementById("selectedName").textContent = `${b.icon} ${b.name}`;
+
+  let details = "";
+  if (b.kind === "producer") {
+    details = `<p>Stock: <b>${b.stock} / ${b.capacity}</b></p><p>Produce: <b>+1 maíz cada 2s</b></p>`;
+  } else if (b.kind === "storage") {
+    details = `<p>Almacenado: <b>${b.stock} / ${b.capacity}</b></p><p>Sirve para guardar y enviar al mercado.</p>`;
+  } else {
+    details = `<p>Compra: <b>2 monedas por maíz</b></p><p>Conectá rutas para vender automático.</p>`;
+  }
+  document.getElementById("selectedData").innerHTML = details;
+}
+
+function draw() {
+  drawBackground();
+  drawMap();
+  drawRoutes();
+  if (state.drag) drawDragLine();
+  drawBuildings();
+  drawVehicles();
+  drawFloatingTexts();
+}
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, world.h);
+  g.addColorStop(0, "#0caee0");
+  g.addColorStop(1, "#0875aa");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, world.w, world.h);
+
+  ctx.globalAlpha = 0.16;
+  ctx.fillStyle = "#ffffff";
+  for (let i = 0; i < 14; i++) {
+    const x = (i * 97) % world.w;
+    const y = 80 + ((i * 131) % 710);
     ctx.beginPath();
-    ctx.arc((i * 113) % 900, 220 + (i * 71) % 1050, 55, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
+    ctx.arc(x, y, 38, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-function drawRoutes() {
-  for (const route of state.routes) {
-    const a = getBuilding(route.from);
-    const b = getBuilding(route.to);
+function drawMap() {
+  const hexes = [
+    [95, 220], [195, 220], [295, 220], [395, 220],
+    [45, 305], [145, 305], [245, 305], [345, 305],
+    [95, 390], [195, 390], [295, 390], [395, 390],
+    [45, 475], [145, 475], [245, 475], [345, 475],
+    [95, 560], [195, 560], [295, 560], [395, 560],
+    [145, 645], [245, 645], [345, 645]
+  ];
 
-    drawRouteLine(a.x, a.y, b.x, b.y, resources[route.resource].color);
+  for (const [x, y] of hexes) drawHex(x, y, 64);
+
+  drawDecoration(72, 248, "🌲");
+  drawDecoration(245, 245, "🌳");
+  drawDecoration(390, 215, "🌼");
+  drawDecoration(78, 610, "🌲");
+  drawDecoration(360, 610, "🌲");
+  drawDecoration(250, 405, "🪨");
+}
+
+function drawHex(x, y, r) {
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i + 30);
+    const px = x + r * Math.cos(a);
+    const py = y + r * Math.sin(a);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
   }
+  ctx.closePath();
 
-  if (state.drag) {
-    const a = getBuilding(state.drag.from);
-    drawRouteLine(a.x, a.y, state.drag.x, state.drag.y, resources[state.drag.resource].color, true);
+  ctx.fillStyle = "#89d746";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(85, 143, 33, .75)";
+  ctx.stroke();
+
+  ctx.globalAlpha = .12;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(x - 18, y - 18, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDecoration(x, y, icon) {
+  ctx.font = "30px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(icon, x, y);
+}
+
+function drawRoutes() {
+  for (const r of state.routes) {
+    const a = getBuilding(r.from);
+    const b = getBuilding(r.to);
+    drawRoad(a.x, a.y + 20, b.x, b.y + 20, r.from === "farm" ? "#74f43d" : "#35bdf7");
   }
 }
 
-function drawRouteLine(x1, y1, x2, y2, color, dashed = false) {
+function drawRoad(x1, y1, x2, y2, color) {
   ctx.save();
-  ctx.lineWidth = 12;
   ctx.lineCap = "round";
-  ctx.strokeStyle = "rgba(20, 30, 38, .45)";
-  if (dashed) ctx.setLineDash([18, 14]);
+
+  ctx.strokeStyle = "#2f343b";
+  ctx.lineWidth = 28;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
   ctx.stroke();
 
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = color;
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([18, 18]);
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  drawArrowDots(x1, y1, x2, y2, color);
+  ctx.restore();
+}
+
+function drawArrowDots(x1, y1, x2, y2, color) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const nx = dx / len;
+  const ny = dy / len;
+
+  ctx.fillStyle = color;
+  for (let d = 62; d < len - 50; d += 34) {
+    const x = x1 + nx * d;
+    const y = y1 + ny * d;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawDragLine() {
+  const a = getBuilding(state.drag.from);
+  ctx.save();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 7;
+  ctx.setLineDash([10, 10]);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y + 20);
+  ctx.lineTo(state.drag.x, state.drag.y);
   ctx.stroke();
   ctx.restore();
 }
 
-function drawBuilding(b) {
+function drawBuildings() {
+  for (const b of buildings) {
+    const selected = state.selected === b.id;
+    drawBuildingBase(b.x, b.y, selected);
+    drawBuildingIcon(b);
+    drawBuildingBubble(b);
+  }
+}
+
+function drawBuildingBase(x, y, selected) {
   ctx.save();
+  ctx.fillStyle = selected ? "#d9f99d" : "#d8f6c6";
+  roundRect(x - 55, y + 32, 110, 50, 16);
+  ctx.fill();
+  ctx.lineWidth = selected ? 5 : 3;
+  ctx.strokeStyle = selected ? "#22c55e" : "#6ab85a";
+  ctx.stroke();
+  ctx.restore();
+}
 
-  ctx.shadowColor = "rgba(0,0,0,.28)";
-  ctx.shadowBlur = 16;
-  ctx.shadowOffsetY = 8;
+function drawBuildingIcon(b) {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = "70px system-ui";
+  ctx.shadowColor = "rgba(0,0,0,.3)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 6;
+  ctx.fillText(b.icon, b.x, b.y + 35);
+  ctx.restore();
+}
 
-  ctx.fillStyle = b.type === "market" ? "#faf5ff" : "#ffffff";
-  roundRect(b.x - 56, b.y - 58, 112, 112, 24);
+function drawBuildingBubble(b) {
+  ctx.save();
+  const w = b.kind === "producer" ? 176 : 150;
+  const h = b.kind === "market" ? 84 : 74;
+  const x = b.x - w / 2;
+  const y = b.y - 116;
+
+  ctx.fillStyle = "rgba(23, 68, 26, .94)";
+  roundRect(x, y, w, h, 14);
   ctx.fill();
 
-  ctx.shadowColor = "transparent";
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = b.type === "market" ? "#a855f7" : "#16a34a";
-  roundRect(b.x - 56, b.y - 58, 112, 112, 24);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#b8f78f";
   ctx.stroke();
 
-  ctx.font = "58px system-ui";
+  ctx.fillStyle = "white";
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(b.icon, b.x, b.y - 10);
+  ctx.font = "bold 18px system-ui";
+  ctx.fillText(b.short.toUpperCase(), b.x, y + 25);
 
-  ctx.fillStyle = "#17351e";
-  ctx.font = "bold 24px system-ui";
-  ctx.fillText(b.name, b.x, b.y + 51);
-
-  if (b.type === "producer") {
-    const progress = Math.min((performance.now() - b.lastProduced) / b.produceEvery, 1);
-    ctx.fillStyle = "rgba(0,0,0,.18)";
-    roundRect(b.x - 50, b.y + 70, 100, 14, 7);
-    ctx.fill();
-    ctx.fillStyle = resources[b.resource].color;
-    roundRect(b.x - 50, b.y + 70, 100 * progress, 14, 7);
-    ctx.fill();
+  ctx.font = "bold 21px system-ui";
+  if (b.kind === "market") {
+    ctx.fillText("Compra: 2 🪙", b.x, y + 58);
+  } else {
+    ctx.fillText(`${b.stock} / ${b.capacity}`, b.x, y + 56);
   }
-
   ctx.restore();
 }
 
-function drawPackets() {
-  for (const p of state.packets) {
-    const from = getBuilding(p.from);
-    const to = getBuilding(p.to);
-    const t = p.progress;
-
-    const x = from.x + (to.x - from.x) * t;
-    const y = from.y + (to.y - from.y) * t;
+function drawVehicles() {
+  for (const v of state.vehicles) {
+    const a = getBuilding(v.from);
+    const b = getBuilding(v.to);
+    const x = lerp(a.x, b.x, smooth(v.t));
+    const y = lerp(a.y + 20, b.y + 20, smooth(v.t));
 
     ctx.save();
-    ctx.globalAlpha = .95;
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(x, y, 28, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.font = "30px system-ui";
+    ctx.translate(x, y);
+    ctx.font = "34px system-ui";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(resources[p.resource].icon, x, y + 1);
+    ctx.fillText(v.from === "farm" ? "🚜" : "🚚", 0, 10);
+    ctx.font = "22px system-ui";
+    ctx.fillText("🌽", 0, -18);
     ctx.restore();
   }
 }
 
-function drawLabels() {
-  ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,.92)";
-  ctx.strokeStyle = "rgba(0,0,0,.2)";
-  ctx.lineWidth = 2;
-  roundRect(330, 250, 255, 150, 20);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#172554";
-  ctx.textAlign = "center";
-  ctx.font = "bold 34px system-ui";
-  ctx.fillText("LEVEL 1", 457, 292);
-
-  ctx.fillStyle = "#2563eb";
-  ctx.font = "bold 20px system-ui";
-  ctx.fillText("Trade Bonus", 457, 325);
-
-  ctx.fillStyle = "#111827";
-  ctx.font = "bold 20px system-ui";
-  ctx.fillText("Conectá rutas al mercado", 457, 358);
-  ctx.restore();
+function drawFloatingTexts() {
+  for (const f of state.floatingTexts) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, f.life);
+    ctx.fillStyle = "white";
+    ctx.strokeStyle = "rgba(0,0,0,.45)";
+    ctx.lineWidth = 4;
+    ctx.font = "bold 24px system-ui";
+    ctx.textAlign = "center";
+    ctx.strokeText(f.text, f.x, f.y);
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.restore();
+  }
 }
 
-function drawToast() {
-  if (!state.message) return;
-  ctx.save();
-  ctx.fillStyle = "rgba(0, 44, 62, .55)";
-  roundRect(130, 1185, 640, 64, 26);
-  ctx.fill();
-
-  ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
-  ctx.font = "bold 25px system-ui";
-  ctx.fillText(state.message, 450, 1226);
-  ctx.restore();
+function addFloat(text, x, y) {
+  state.floatingTexts.push({ text, x, y, life: 1 });
 }
 
-function update(dt, now) {
-  for (const b of buildings) {
-    if (b.type !== "producer") continue;
+function showToast(text) {
+  const toast = document.getElementById("toast");
+  toast.textContent = text;
+  toast.classList.remove("hidden");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.add("hidden"), 1100);
+}
 
-    if (now - b.lastProduced >= b.produceEvery) {
-      b.lastProduced = now;
-      state.stock[b.resource]++;
+function getPointer(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (world.w / rect.width),
+    y: (e.clientY - rect.top) * (world.h / rect.height)
+  };
+}
 
-      const route = state.routes.find(r => r.from === b.id && r.resource === b.resource);
-      if (route && state.stock[b.resource] > 0) {
-        state.stock[b.resource]--;
-        state.packets.push({
-          from: route.from,
-          to: route.to,
-          resource: route.resource,
-          progress: 0,
-          speed: 0.32
-        });
-      }
-    }
+function hitBuilding(x, y) {
+  return buildings.find(b => Math.hypot(x - b.x, y - b.y) < 75);
+}
+
+canvas.addEventListener("pointerdown", e => {
+  const p = getPointer(e);
+  const b = hitBuilding(p.x, p.y);
+
+  if (!b) {
+    state.selected = null;
+    return;
   }
 
-  for (const p of state.packets) {
-    p.progress += dt * p.speed;
+  state.selected = b.id;
+
+  if (b.kind !== "market") {
+    state.drag = { from: b.id, x: p.x, y: p.y };
+    canvas.setPointerCapture(e.pointerId);
+  }
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!state.drag) return;
+  const p = getPointer(e);
+  state.drag.x = p.x;
+  state.drag.y = p.y;
+});
+
+canvas.addEventListener("pointerup", e => {
+  if (!state.drag) return;
+
+  const p = getPointer(e);
+  const target = hitBuilding(p.x, p.y);
+  const from = getBuilding(state.drag.from);
+
+  if (target && target.id !== from.id && validRoute(from, target)) {
+    state.routes = state.routes.filter(r => r.from !== from.id);
+    state.routes.push({ from: from.id, to: target.id, resource: "corn" });
+    showToast(`Ruta: ${from.short} → ${target.short}`);
+    saveGame();
+  } else {
+    showToast("Ruta no válida");
   }
 
-  const arrived = state.packets.filter(p => p.progress >= 1);
-  state.packets = state.packets.filter(p => p.progress < 1);
+  state.drag = null;
+});
 
-  for (const p of arrived) {
-    if (p.to === "market") {
-      state.money += resources[p.resource].price;
-      state.message = `Vendiste ${resources[p.resource].label} +$${resources[p.resource].price}`;
-    }
-  }
-
-  renderTopbar();
-}
-
-function renderTopbar() {
-  document.getElementById("money").textContent = state.money;
-  document.getElementById("corn").textContent = state.stock.corn;
-  document.getElementById("tomato").textContent = state.stock.tomato;
-  document.getElementById("milk").textContent = state.stock.milk;
-}
-
-function draw() {
-  drawWater();
-
-  for (const h of hexes) drawHex(h[0], h[1], h[2]);
-
-  drawLabels();
-  drawRoutes();
-
-  for (const b of buildings) drawBuilding(b);
-
-  drawPackets();
-  drawToast();
-}
-
-function loop(now) {
-  const dt = Math.min((now - lastFrame) / 1000, 0.05);
-  lastFrame = now;
-
-  update(dt, now);
-  draw();
-
-  requestAnimationFrame(loop);
+function validRoute(from, to) {
+  if (from.id === "farm") return to.id === "depot" || to.id === "market";
+  if (from.id === "depot") return to.id === "market";
+  return false;
 }
 
 function getBuilding(id) {
   return buildings.find(b => b.id === id);
 }
 
-function getPointerPos(event) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (event.clientX - rect.left) * (world.width / rect.width),
-    y: (event.clientY - rect.top) * (world.height / rect.height)
-  };
-}
-
-function hitBuilding(x, y) {
-  return buildings.find(b => {
-    const dx = x - b.x;
-    const dy = y - b.y;
-    return Math.sqrt(dx * dx + dy * dy) < 70;
-  });
-}
-
-canvas.addEventListener("pointerdown", event => {
-  const pos = getPointerPos(event);
-  const b = hitBuilding(pos.x, pos.y);
-
-  if (!b || b.type !== "producer") return;
-
-  state.drag = {
-    from: b.id,
-    resource: b.resource,
-    x: pos.x,
-    y: pos.y
-  };
-  canvas.setPointerCapture(event.pointerId);
-});
-
-canvas.addEventListener("pointermove", event => {
-  if (!state.drag) return;
-  const pos = getPointerPos(event);
-  state.drag.x = pos.x;
-  state.drag.y = pos.y;
-});
-
-canvas.addEventListener("pointerup", event => {
-  if (!state.drag) return;
-
-  const pos = getPointerPos(event);
-  const target = hitBuilding(pos.x, pos.y);
-
-  if (target && target.type === "market") {
-    state.routes = state.routes.filter(r => r.from !== state.drag.from);
-    state.routes.push({
-      from: state.drag.from,
-      to: target.id,
-      resource: state.drag.resource
-    });
-    state.message = "Ruta creada al mercado ✅";
-  } else {
-    state.message = "Soltá la línea sobre el mercado";
-  }
-
-  state.drag = null;
-});
-
-document.getElementById("clearRoutes").addEventListener("click", () => {
-  state.routes = [];
-  state.message = "Rutas borradas";
-});
-
 function roundRect(x, y, w, h, r) {
-  const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
 
-resizeCanvasForDevice();
-for (const b of buildings) {
-  if (b.type === "producer") b.lastProduced = performance.now();
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
-renderTopbar();
+function smooth(t) {
+  return t * t * (3 - 2 * t);
+}
+
+setInterval(saveGame, 10000);
 requestAnimationFrame(loop);

@@ -1,35 +1,49 @@
-# EconoMy - Map Prototype
+# EconoMy 0.1
 
-Prototipo visual tipo mapa, inspirado en juegos de producción con rutas.
+Prototipo funcional mobile-first.
 
-## Qué tiene
+## Mecánica actual
 
-- Mapa 2D estilo isla.
-- Tres productores:
-  - Plantación de maíz
-  - Granja de tomates
-  - Tambo
-- Mercado central.
-- Rutas arrastrables: arrastrá desde un edificio hasta el mercado.
-- Recursos animados viajando por las rutas.
-- Dinero al vender recursos.
+- Plantación de maíz.
+- Depósito.
+- Mercado.
+- Arrastrar rutas:
+  - Plantación → Depósito
+  - Plantación → Mercado
+  - Depósito → Mercado
+- Camioncitos animados.
+- Stock en edificios.
+- Venta automática en mercado.
+- Guardado local automático.
+- Preparado como PWA básica.
 
 ## Cómo probar
 
-Abrí `index.html` en el navegador.
+Abrir `index.html` en el navegador.
 
 ## Cómo subir a GitHub Pages
 
-1. Crear repo nuevo.
-2. Subir `index.html`, `style.css`, `game.js` y este README.
+1. Crear un repositorio.
+2. Subir estos archivos.
 3. Ir a Settings > Pages.
-4. Seleccionar rama `main` y carpeta `/root`.
+4. Elegir rama `main` y carpeta `/root`.
 5. Guardar.
 
-## Próximos pasos
+## Camino a Android / iOS
 
-- Molino: maíz → harina.
-- Cocina: tomate → salsa.
-- Quesería: leche → queso.
-- Pizzería: harina + salsa + queso → pizza.
-- Mejoras y desbloqueo de mapa.
+Este proyecto puede convertirse a app móvil con:
+
+- PWA: instalable desde navegador.
+- Capacitor: genera proyecto Android e iOS usando la misma base web.
+
+Comandos futuros orientativos:
+
+```bash
+npm create vite@latest economy
+npm install @capacitor/core @capacitor/cli
+npx cap init EconoMy com.economy.game
+npx cap add android
+npx cap add ios
+```
+
+Para iOS hace falta una Mac con Xcode.
