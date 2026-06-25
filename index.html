@@ -3,17 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>EconoMy 0.1</title>
+  <title>EconoMy 0.2.1 Fixed</title>
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="gameShell">
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="mapCanvas"></canvas>
+
+    <div id="routesLayer"></div>
+    <div id="vehiclesLayer"></div>
+    <div id="buildingsLayer"></div>
+    <div id="effectsLayer"></div>
 
     <div class="hud top">
       <div class="pill money">🪙 <strong id="money">0</strong></div>
-      <div class="pill level">⭐ <strong>1</strong><span>180 / 500</span></div>
+      <div class="pill level">⭐ <strong>1</strong><span id="xpText">180 / 500</span></div>
       <button id="menuBtn" class="menu">☰</button>
     </div>
 
@@ -22,25 +27,34 @@
       <div id="selectedData"></div>
     </section>
 
+    <section id="upgradePanel" class="upgrade-panel hidden">
+      <div class="panel-head">
+        <h2>Mejoras</h2>
+        <button id="closeUpgrades">×</button>
+      </div>
+      <div id="upgradeList"></div>
+    </section>
+
     <section class="how">
       <h2>Cómo jugar</h2>
       <div class="steps">
         <article><b>1</b><span>tocá un edificio</span></article>
-        <article><b>2</b><span>arrastrá hasta otro</span></article>
-        <article><b>3</b><span>los recursos viajan solos</span></article>
+        <article><b>2</b><span>arrastrá una ruta</span></article>
+        <article><b>3</b><span>mejorá y vendé más caro</span></article>
       </div>
     </section>
 
     <footer class="bottom">
-      <button class="tab active">🏪<span>Mercado</span></button>
-      <button class="tab">🔗<span>Rutas</span></button>
-      <button class="tab">⬆️<span>Mejoras</span></button>
-      <button class="tab">📦<span>Almacén</span></button>
+      <button id="marketTab" class="tab active">🏪<span>Mercado</span></button>
+      <button id="routesTab" class="tab">🔗<span>Rutas</span></button>
+      <button id="upgradesTab" class="tab">⬆️<span>Mejoras</span></button>
+      <button id="storageTab" class="tab">📦<span>Almacén</span></button>
     </footer>
 
     <div id="toast" class="toast hidden"></div>
+    <div id="errorBox" class="error-box hidden"></div>
   </div>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=021"></script>
 </body>
 </html>

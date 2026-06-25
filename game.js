@@ -1,87 +1,32 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+window.addEventListener("error", function(event) {
+  const box = document.getElementById("errorBox");
+  if (box) {
+    box.textContent = "Error: " + event.message;
+    box.classList.remove("hidden");
+  }
+});
 
-const SAVE_KEY = "economy-mobile-v02";
-const world = { w: 460, h: 920 };
+const shell = document.getElementById("gameShell");
+const canvas = document.getElementById("mapCanvas");
+const ctx = canvas.getContext("2d");
+const buildingsLayer = document.getElementById("buildingsLayer");
+const routesLayer = document.getElementById("routesLayer");
+const vehiclesLayer = document.getElementById("vehiclesLayer");
+const effectsLayer = document.getElementById("effectsLayer");
+
+const SAVE_KEY = "economy-mobile-v021-fixed";
 
 const buildings = [
-  {
-    id: "farm",
-    name: "Plantación de Maíz",
-    short: "Maíz",
-    kind: "producer",
-    icon: "🌽",
-    x: 135,
-    y: 330,
-    stock: 0,
-    capacity: 20,
-    baseProduceEvery: 2.0,
-    produceTimer: 0,
-    resource: "corn"
-  },
-  {
-    id: "depot",
-    name: "Depósito",
-    short: "Depósito",
-    kind: "storage",
-    icon: "📦",
-    x: 230,
-    y: 560,
-    stock: 0,
-    capacity: 100,
-    resource: "corn"
-  },
-  {
-    id: "market",
-    name: "Mercado",
-    short: "Mercado",
-    kind: "market",
-    icon: "🏪",
-    x: 335,
-    y: 330,
-    stock: 0,
-    capacity: 9999,
-    resource: "corn"
-  }
+  { id: "farm", name: "Plantación de Maíz", short: "Maíz", kind: "producer", icon: "🌽", x: 0.30, y: 0.36, stock: 0, capacity: 20, timer: 0 },
+  { id: "depot", name: "Depósito", short: "Depósito", kind: "storage", icon: "📦", x: 0.50, y: 0.60, stock: 0, capacity: 100, timer: 0 },
+  { id: "market", name: "Mercado", short: "Mercado", kind: "market", icon: "🏪", x: 0.72, y: 0.36, stock: 0, capacity: 9999, timer: 0 }
 ];
 
 const upgrades = {
-  production: {
-    id: "production",
-    title: "🌽 Producción de maíz",
-    description: "La plantación produce más rápido.",
-    level: 0,
-    max: 5,
-    baseCost: 20,
-    costGrowth: 1.75
-  },
-  transport: {
-    id: "transport",
-    title: "🚚 Transporte",
-    description: "Los vehículos viajan más rápido y pueden salir más a la vez.",
-    level: 0,
-    max: 5,
-    baseCost: 25,
-    costGrowth: 1.8
-  },
-  market: {
-    id: "market",
-    title: "🏪 Precio del mercado",
-    description: "El mercado paga más por cada maíz.",
-    level: 0,
-    max: 5,
-    baseCost: 30,
-    costGrowth: 2
-  },
-  storage: {
-    id: "storage",
-    title: "📦 Capacidad del depósito",
-    description: "El depósito puede guardar más maíz.",
-    level: 0,
-    max: 5,
-    baseCost: 18,
-    costGrowth: 1.65
-  }
+  production: { id: "production", title: "🌽 Producción", description: "La plantación produce más rápido.", level: 0, max: 5, baseCost: 20, growth: 1.75 },
+  transport: { id: "transport", title: "🚚 Transporte", description: "Los vehículos viajan más rápido y salen más a la vez.", level: 0, max: 5, baseCost: 25, growth: 1.8 },
+  market: { id: "market", title: "🏪 Mercado", description: "El mercado paga más por cada maíz.", level: 0, max: 5, baseCost: 30, growth: 2 },
+  storage: { id: "storage", title: "📦 Almacén", description: "El depósito guarda más maíz.", level: 0, max: 5, baseCost: 18, growth: 1.65 }
 };
 
 const state = {
@@ -90,69 +35,25 @@ const state = {
   routes: [],
   vehicles: [],
   selected: null,
-  drag: null,
-  floatingTexts: [],
-  lastTime: performance.now(),
-  activeTab: "market"
+  dragging: null,
+  activeTab: "market",
+  last: performance.now()
 };
 
 loadGame();
-applyUpgradeEffects();
+applyEffects();
 
-function getProductionSeconds() {
-  return Math.max(0.55, 2.0 - upgrades.production.level * 0.25);
-}
+function pxX(v) { return v * shell.clientWidth; }
+function pxY(v) { return v * shell.clientHeight; }
+function getB(id) { return buildings.find(b => b.id === id); }
+function price() { return 2 + upgrades.market.level; }
+function prodTime() { return Math.max(0.55, 2 - upgrades.production.level * 0.25); }
+function vehicleSpeed() { return 0.28 + upgrades.transport.level * 0.055; }
+function maxVehicles() { return 2 + Math.floor((upgrades.transport.level + 1) / 2); }
+function upgradeCost(u) { return Math.floor(u.baseCost * Math.pow(u.growth, u.level)); }
 
-function getMarketPrice() {
-  return 2 + upgrades.market.level;
-}
-
-function getVehicleSpeed(routeTo) {
-  const base = routeTo === "market" ? 0.26 : 0.24;
-  return base + upgrades.transport.level * 0.045;
-}
-
-function getMaxVehiclesPerRoute() {
-  return 2 + Math.floor((upgrades.transport.level + 1) / 2);
-}
-
-function getUpgradeCost(upgrade) {
-  return Math.floor(upgrade.baseCost * Math.pow(upgrade.costGrowth, upgrade.level));
-}
-
-function applyUpgradeEffects() {
-  const depot = getBuilding("depot");
-  depot.capacity = 100 + upgrades.storage.level * 60;
-}
-
-function buyUpgrade(id) {
-  const upgrade = upgrades[id];
-  if (!upgrade || upgrade.level >= upgrade.max) return;
-
-  const cost = getUpgradeCost(upgrade);
-  if (state.money < cost) {
-    showToast("Faltan monedas");
-    return;
-  }
-
-  state.money -= cost;
-  upgrade.level++;
-  applyUpgradeEffects();
-  addFloat("MEJORA ↑", 230, 215);
-  showToast(`${upgrade.title} nivel ${upgrade.level}`);
-  saveGame();
-  renderUpgradePanel();
-}
-
-function saveGame() {
-  const data = {
-    money: state.money,
-    xp: state.xp,
-    routes: state.routes,
-    upgrades: Object.fromEntries(Object.entries(upgrades).map(([key, u]) => [key, u.level])),
-    buildings: buildings.map(b => ({ id: b.id, stock: b.stock }))
-  };
-  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+function applyEffects() {
+  getB("depot").capacity = 100 + upgrades.storage.level * 60;
 }
 
 function loadGame() {
@@ -162,17 +63,27 @@ function loadGame() {
     if (typeof saved.xp === "number") state.xp = saved.xp;
     if (Array.isArray(saved.routes)) state.routes = saved.routes;
     if (saved.upgrades) {
-      for (const [key, level] of Object.entries(saved.upgrades)) {
-        if (upgrades[key] && typeof level === "number") upgrades[key].level = Math.min(level, upgrades[key].max);
+      for (const [k, v] of Object.entries(saved.upgrades)) {
+        if (upgrades[k]) upgrades[k].level = Math.min(Number(v) || 0, upgrades[k].max);
       }
     }
     if (Array.isArray(saved.buildings)) {
       for (const item of saved.buildings) {
-        const b = buildings.find(x => x.id === item.id);
-        if (b && typeof item.stock === "number") b.stock = item.stock;
+        const b = getB(item.id);
+        if (b) b.stock = Number(item.stock) || 0;
       }
     }
   } catch {}
+}
+
+function saveGame() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    money: state.money,
+    xp: state.xp,
+    routes: state.routes,
+    upgrades: Object.fromEntries(Object.entries(upgrades).map(([k, u]) => [k, u.level])),
+    buildings: buildings.map(b => ({ id: b.id, stock: b.stock }))
+  }));
 }
 
 function resetGame() {
@@ -180,540 +91,344 @@ function resetGame() {
   state.xp = 180;
   state.routes = [];
   state.vehicles = [];
-  for (const key of Object.keys(upgrades)) upgrades[key].level = 0;
-  for (const b of buildings) {
-    b.stock = 0;
-    b.produceTimer = 0;
-  }
-  applyUpgradeEffects();
+  state.selected = null;
+  for (const u of Object.values(upgrades)) u.level = 0;
+  for (const b of buildings) { b.stock = 0; b.timer = 0; }
+  applyEffects();
   saveGame();
-  renderUpgradePanel();
-  showToast("Partida reiniciada");
-}
-
-document.getElementById("menuBtn").addEventListener("click", resetGame);
-document.getElementById("closeUpgrades").addEventListener("click", () => setActiveTab("market"));
-document.getElementById("marketTab").addEventListener("click", () => setActiveTab("market"));
-document.getElementById("routesTab").addEventListener("click", () => setActiveTab("routes"));
-document.getElementById("upgradesTab").addEventListener("click", () => setActiveTab("upgrades"));
-document.getElementById("storageTab").addEventListener("click", () => setActiveTab("storage"));
-
-function setActiveTab(tab) {
-  state.activeTab = tab;
-  for (const btn of document.querySelectorAll(".tab")) btn.classList.remove("active");
-
-  const map = {
-    market: "marketTab",
-    routes: "routesTab",
-    upgrades: "upgradesTab",
-    storage: "storageTab"
-  };
-  document.getElementById(map[tab]).classList.add("active");
-
-  document.getElementById("upgradePanel").classList.toggle("hidden", tab !== "upgrades");
-
-  if (tab === "routes") showToast("Arrastrá edificio → destino");
-  if (tab === "storage") {
-    state.selected = "depot";
-    showToast("Depósito seleccionado");
-  }
-  if (tab === "market") {
-    state.selected = "market";
-    showToast(`Precio actual: ${getMarketPrice()} 🪙`);
-  }
-
-  renderUpgradePanel();
-}
-
-function renderUpgradePanel() {
-  const list = document.getElementById("upgradeList");
-  list.innerHTML = "";
-
-  for (const upgrade of Object.values(upgrades)) {
-    const cost = getUpgradeCost(upgrade);
-    const maxed = upgrade.level >= upgrade.max;
-    const canBuy = state.money >= cost && !maxed;
-
-    const card = document.createElement("article");
-    card.className = "upgrade-card";
-    card.innerHTML = `
-      <h3>${upgrade.title} · Nivel ${upgrade.level}/${upgrade.max}</h3>
-      <p>${upgrade.description}</p>
-      <button ${canBuy ? "" : "disabled"}>
-        ${maxed ? "Máximo" : `Mejorar por ${cost} 🪙`}
-      </button>
-    `;
-    card.querySelector("button").addEventListener("click", () => buyUpgrade(upgrade.id));
-    list.appendChild(card);
-  }
+  renderAll();
+  toast("Reiniciado");
 }
 
 function resize() {
-  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-  canvas.width = world.w * dpr;
-  canvas.height = world.h * dpr;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = shell.clientWidth * dpr;
+  canvas.height = shell.clientHeight * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-resize();
-window.addEventListener("resize", resize);
-
-function loop(now) {
-  const dt = Math.min((now - state.lastTime) / 1000, 0.05);
-  state.lastTime = now;
-  update(dt);
-  draw();
-  requestAnimationFrame(loop);
+  drawMap();
+  renderAll();
 }
 
-function update(dt) {
-  updateProduction(dt);
-  updateTransport(dt);
-  updateFloatingTexts(dt);
-  updateUI();
+function drawMap() {
+  const w = shell.clientWidth;
+  const h = shell.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, "#13bce0");
+  g.addColorStop(1, "#0876a6");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  const hexes = [
+    [0.22,0.23],[0.45,0.23],[0.68,0.23],
+    [0.10,0.32],[0.33,0.32],[0.56,0.32],[0.79,0.32],
+    [0.22,0.41],[0.45,0.41],[0.68,0.41],
+    [0.10,0.50],[0.33,0.50],[0.56,0.50],[0.79,0.50],
+    [0.22,0.59],[0.45,0.59],[0.68,0.59],
+    [0.33,0.68],[0.56,0.68],[0.79,0.68]
+  ];
+
+  for (const [x,y] of hexes) drawHex(pxX(x), pxY(y), Math.min(w * 0.145, 64));
+
+  drawText("🌲", pxX(0.18), pxY(0.28), 28);
+  drawText("🌳", pxX(0.53), pxY(0.25), 30);
+  drawText("🪨", pxX(0.55), pxY(0.44), 26);
+  drawText("🌲", pxX(0.82), pxY(0.64), 28);
 }
 
-function updateProduction(dt) {
-  const farm = getBuilding("farm");
-  const hasOutput = state.routes.some(r => r.from === "farm");
-  const canStore = farm.stock < farm.capacity;
-
-  if (!hasOutput && !canStore) return;
-
-  farm.produceTimer += dt;
-  if (farm.produceTimer >= getProductionSeconds()) {
-    farm.produceTimer = 0;
-
-    if (hasOutput) {
-      spawnVehicleFromRoute("farm");
-    } else if (canStore) {
-      farm.stock++;
-      addFloat("+1 🌽", farm.x, farm.y - 80);
-    }
+function drawHex(x, y, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i + 30);
+    const nx = x + r * Math.cos(a);
+    const ny = y + r * Math.sin(a);
+    if (i === 0) ctx.moveTo(nx, ny);
+    else ctx.lineTo(nx, ny);
   }
+  ctx.closePath();
+  ctx.fillStyle = "#8bd84b";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(71, 125, 31, .78)";
+  ctx.stroke();
 }
 
-function updateTransport(dt) {
-  for (const v of state.vehicles) {
-    v.t += dt * v.speed;
-  }
-
-  const arrived = state.vehicles.filter(v => v.t >= 1);
-  state.vehicles = state.vehicles.filter(v => v.t < 1);
-
-  for (const v of arrived) {
-    const to = getBuilding(v.to);
-
-    if (to.kind === "market") {
-      const price = getMarketPrice();
-      state.money += price;
-      state.xp += 2;
-      addFloat(`+${price} 🪙`, to.x, to.y - 95);
-      showToast(`Maíz vendido +${price}`);
-    } else if (to.kind === "storage") {
-      if (to.stock < to.capacity) {
-        to.stock++;
-        addFloat("+1 🌽", to.x, to.y - 95);
-      }
-    }
-
-    if (to.kind === "storage") {
-      dispatchFromStorage(to.id);
-    }
-  }
-
-  for (const route of state.routes) {
-    if (route.from === "depot") dispatchFromStorage("depot");
-  }
+function drawText(text, x, y, size) {
+  ctx.font = size + "px system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
 }
 
-function dispatchFromStorage(storageId) {
-  const storage = getBuilding(storageId);
-  const route = state.routes.find(r => r.from === storageId);
-  if (!route) return;
-  if (storage.stock <= 0) return;
-
-  const alreadyOnRoute = state.vehicles.filter(v => v.from === storageId).length;
-  if (alreadyOnRoute >= getMaxVehiclesPerRoute()) return;
-
-  storage.stock--;
-  state.vehicles.push({
-    from: route.from,
-    to: route.to,
-    resource: "corn",
-    t: 0,
-    speed: getVehicleSpeed(route.to)
-  });
+function renderAll() {
+  renderHud();
+  renderRoutes();
+  renderBuildings();
+  renderVehicles();
+  renderSelected();
+  renderUpgrades();
 }
 
-function spawnVehicleFromRoute(fromId) {
-  const route = state.routes.find(r => r.from === fromId);
-  if (!route) {
-    const from = getBuilding(fromId);
-    if (from.stock < from.capacity) from.stock++;
-    return;
-  }
-
-  const target = getBuilding(route.to);
-  if (target.kind === "storage" && target.stock >= target.capacity) {
-    const farm = getBuilding(fromId);
-    if (farm.stock < farm.capacity) farm.stock++;
-    return;
-  }
-
-  const alreadyOnRoute = state.vehicles.filter(v => v.from === fromId).length;
-  if (alreadyOnRoute >= getMaxVehiclesPerRoute()) {
-    const farm = getBuilding(fromId);
-    if (farm.stock < farm.capacity) farm.stock++;
-    return;
-  }
-
-  state.vehicles.push({
-    from: route.from,
-    to: route.to,
-    resource: "corn",
-    t: 0,
-    speed: getVehicleSpeed(route.to)
-  });
-}
-
-function updateFloatingTexts(dt) {
-  for (const f of state.floatingTexts) {
-    f.life -= dt;
-    f.y -= dt * 28;
-  }
-  state.floatingTexts = state.floatingTexts.filter(f => f.life > 0);
-}
-
-function updateUI() {
+function renderHud() {
   document.getElementById("money").textContent = state.money;
-  document.getElementById("xpText").textContent = `${state.xp} / 500`;
+  document.getElementById("xpText").textContent = state.xp + " / 500";
+}
 
+function renderBuildings() {
+  buildingsLayer.innerHTML = "";
+  for (const b of buildings) {
+    const el = document.createElement("div");
+    el.className = "building" + (state.selected === b.id ? " selected" : "");
+    el.dataset.id = b.id;
+    el.style.left = pxX(b.x) + "px";
+    el.style.top = pxY(b.y) + "px";
+    el.innerHTML = `
+      <div class="bubble">
+        <h3>${b.short}</h3>
+        <strong>${b.kind === "market" ? "Compra: " + price() + " 🪙" : b.stock + " / " + b.capacity}</strong>
+      </div>
+      <div class="base"></div>
+      <div class="icon">${b.icon}</div>
+    `;
+    el.addEventListener("pointerdown", buildingPointerDown);
+    buildingsLayer.appendChild(el);
+  }
+}
+
+function renderRoutes() {
+  routesLayer.innerHTML = "";
+  for (const r of state.routes) {
+    const a = getB(r.from);
+    const b = getB(r.to);
+    drawRouteEl(a, b, r.from);
+  }
+  if (state.dragging) drawDragEl();
+}
+
+function drawRouteEl(a, b, cls) {
+  const x1 = pxX(a.x), y1 = pxY(a.y) + 18;
+  const x2 = pxX(b.x), y2 = pxY(b.y) + 18;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const el = document.createElement("div");
+  el.className = "route-line " + cls;
+  el.style.left = x1 + "px";
+  el.style.top = (y1 - 13) + "px";
+  el.style.width = len + "px";
+  el.style.transform = "rotate(" + Math.atan2(dy, dx) + "rad)";
+  routesLayer.appendChild(el);
+}
+
+function drawDragEl() {
+  const a = getB(state.dragging.from);
+  const x1 = pxX(a.x), y1 = pxY(a.y) + 18;
+  const x2 = state.dragging.x, y2 = state.dragging.y;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const el = document.createElement("div");
+  el.className = "drag-line";
+  el.style.left = x1 + "px";
+  el.style.top = (y1 - 4) + "px";
+  el.style.width = len + "px";
+  el.style.transform = "rotate(" + Math.atan2(dy, dx) + "rad)";
+  routesLayer.appendChild(el);
+}
+
+function renderVehicles() {
+  vehiclesLayer.innerHTML = "";
+  for (const v of state.vehicles) {
+    const a = getB(v.from);
+    const b = getB(v.to);
+    const t = smooth(v.t);
+    const x = lerp(pxX(a.x), pxX(b.x), t);
+    const y = lerp(pxY(a.y)+18, pxY(b.y)+18, t);
+    const el = document.createElement("div");
+    el.className = "vehicle";
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.innerHTML = `<span>🌽</span>${v.from === "farm" ? "🚜" : "🚚"}`;
+    vehiclesLayer.appendChild(el);
+  }
+}
+
+function renderSelected() {
   const panel = document.getElementById("selectedPanel");
   if (!state.selected || state.activeTab === "upgrades") {
     panel.classList.add("hidden");
     return;
   }
 
-  const b = getBuilding(state.selected);
+  const b = getB(state.selected);
   panel.classList.remove("hidden");
-  document.getElementById("selectedName").textContent = `${b.icon} ${b.name}`;
+  document.getElementById("selectedName").textContent = b.icon + " " + b.name;
 
-  let details = "";
-  if (b.kind === "producer") {
-    details = `<p>Stock: <b>${b.stock} / ${b.capacity}</b></p><p>Produce: <b>+1 maíz cada ${getProductionSeconds().toFixed(2)}s</b></p><p>Mejora producción para acelerar.</p>`;
-  } else if (b.kind === "storage") {
-    details = `<p>Almacenado: <b>${b.stock} / ${b.capacity}</b></p><p>Transporte: <b>${getMaxVehiclesPerRoute()} vehículos por ruta</b></p><p>Mejorá almacén y transporte.</p>`;
-  } else {
-    details = `<p>Compra: <b>${getMarketPrice()} monedas por maíz</b></p><p>Mejorá el mercado para vender más caro.</p>`;
-  }
-  document.getElementById("selectedData").innerHTML = details;
+  let html = "";
+  if (b.kind === "producer") html = `<p>Stock: <b>${b.stock} / ${b.capacity}</b></p><p>Produce: <b>+1 maíz cada ${prodTime().toFixed(2)}s</b></p>`;
+  if (b.kind === "storage") html = `<p>Almacenado: <b>${b.stock} / ${b.capacity}</b></p><p>Vehículos por ruta: <b>${maxVehicles()}</b></p>`;
+  if (b.kind === "market") html = `<p>Compra: <b>${price()} monedas por maíz</b></p><p>Mejorá el mercado para vender más caro.</p>`;
+
+  document.getElementById("selectedData").innerHTML = html;
 }
 
-function draw() {
-  drawBackground();
-  drawMap();
-  drawRoutes();
-  if (state.drag) drawDragLine();
-  drawBuildings();
-  drawVehicles();
-  drawFloatingTexts();
-}
-
-function drawBackground() {
-  const g = ctx.createLinearGradient(0, 0, 0, world.h);
-  g.addColorStop(0, "#0caee0");
-  g.addColorStop(1, "#0875aa");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, world.w, world.h);
-
-  ctx.globalAlpha = 0.16;
-  ctx.fillStyle = "#ffffff";
-  for (let i = 0; i < 14; i++) {
-    const x = (i * 97) % world.w;
-    const y = 80 + ((i * 131) % 710);
-    ctx.beginPath();
-    ctx.arc(x, y, 38, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function drawMap() {
-  const hexes = [
-    [95, 220], [195, 220], [295, 220], [395, 220],
-    [45, 305], [145, 305], [245, 305], [345, 305],
-    [95, 390], [195, 390], [295, 390], [395, 390],
-    [45, 475], [145, 475], [245, 475], [345, 475],
-    [95, 560], [195, 560], [295, 560], [395, 560],
-    [145, 645], [245, 645], [345, 645]
-  ];
-
-  for (const [x, y] of hexes) drawHex(x, y, 64);
-
-  drawDecoration(72, 248, "🌲");
-  drawDecoration(245, 245, "🌳");
-  drawDecoration(390, 215, "🌼");
-  drawDecoration(78, 610, "🌲");
-  drawDecoration(360, 610, "🌲");
-  drawDecoration(250, 405, "🪨");
-}
-
-function drawHex(x, y, r) {
-  ctx.save();
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = Math.PI / 180 * (60 * i + 30);
-    const px = x + r * Math.cos(a);
-    const py = y + r * Math.sin(a);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-
-  ctx.fillStyle = "#89d746";
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(85, 143, 33, .75)";
-  ctx.stroke();
-
-  ctx.globalAlpha = .12;
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(x - 18, y - 18, 24, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawDecoration(x, y, icon) {
-  ctx.font = "30px system-ui";
-  ctx.textAlign = "center";
-  ctx.fillText(icon, x, y);
-}
-
-function drawRoutes() {
-  for (const r of state.routes) {
-    const a = getBuilding(r.from);
-    const b = getBuilding(r.to);
-    drawRoad(a.x, a.y + 20, b.x, b.y + 20, r.from === "farm" ? "#74f43d" : "#35bdf7");
+function renderUpgrades() {
+  const list = document.getElementById("upgradeList");
+  list.innerHTML = "";
+  for (const u of Object.values(upgrades)) {
+    const cost = upgradeCost(u);
+    const maxed = u.level >= u.max;
+    const card = document.createElement("article");
+    card.className = "upgrade-card";
+    card.innerHTML = `
+      <h3>${u.title} · Nivel ${u.level}/${u.max}</h3>
+      <p>${u.description}</p>
+      <button ${state.money >= cost && !maxed ? "" : "disabled"}>
+        ${maxed ? "Máximo" : "Mejorar por " + cost + " 🪙"}
+      </button>
+    `;
+    card.querySelector("button").addEventListener("click", () => buyUpgrade(u.id));
+    list.appendChild(card);
   }
 }
 
-function drawRoad(x1, y1, x2, y2, color) {
-  ctx.save();
-  ctx.lineCap = "round";
-
-  ctx.strokeStyle = "#2f343b";
-  ctx.lineWidth = 28;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#f8fafc";
-  ctx.lineWidth = 4;
-  ctx.setLineDash([18, 18]);
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  drawArrowDots(x1, y1, x2, y2, color);
-  ctx.restore();
+function buyUpgrade(id) {
+  const u = upgrades[id];
+  const cost = upgradeCost(u);
+  if (!u || u.level >= u.max || state.money < cost) {
+    toast("Faltan monedas");
+    return;
+  }
+  state.money -= cost;
+  u.level++;
+  applyEffects();
+  floatText("MEJORA ↑", pxX(0.5), pxY(0.24));
+  toast(u.title + " nivel " + u.level);
+  saveGame();
+  renderAll();
 }
 
-function drawArrowDots(x1, y1, x2, y2, color) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.hypot(dx, dy);
-  const nx = dx / len;
-  const ny = dy / len;
+function update(dt) {
+  const farm = getB("farm");
+  const farmRoute = state.routes.find(r => r.from === "farm");
+  farm.timer += dt;
+  if (farm.timer >= prodTime()) {
+    farm.timer = 0;
+    if (farmRoute) {
+      spawnVehicle("farm", farmRoute.to);
+    } else if (farm.stock < farm.capacity) {
+      farm.stock++;
+      floatText("+1 🌽", pxX(farm.x), pxY(farm.y)-80);
+    }
+  }
 
-  ctx.fillStyle = color;
-  for (let d = 62; d < len - 50; d += 34) {
-    const x = x1 + nx * d;
-    const y = y1 + ny * d;
-    ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fill();
+  const depotRoute = state.routes.find(r => r.from === "depot");
+  if (depotRoute) tryDispatchDepot(depotRoute.to);
+
+  for (const v of state.vehicles) v.t += dt * v.speed;
+
+  const arrived = state.vehicles.filter(v => v.t >= 1);
+  state.vehicles = state.vehicles.filter(v => v.t < 1);
+
+  for (const v of arrived) {
+    const to = getB(v.to);
+    if (to.kind === "market") {
+      state.money += price();
+      state.xp += 2;
+      floatText("+" + price() + " 🪙", pxX(to.x), pxY(to.y)-88);
+    } else if (to.kind === "storage" && to.stock < to.capacity) {
+      to.stock++;
+      floatText("+1 🌽", pxX(to.x), pxY(to.y)-88);
+    }
   }
 }
 
-function drawDragLine() {
-  const a = getBuilding(state.drag.from);
-  ctx.save();
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 7;
-  ctx.setLineDash([10, 10]);
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y + 20);
-  ctx.lineTo(state.drag.x, state.drag.y);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawBuildings() {
-  for (const b of buildings) {
-    const selected = state.selected === b.id;
-    drawBuildingBase(b.x, b.y, selected);
-    drawBuildingIcon(b);
-    drawBuildingBubble(b);
-  }
-}
-
-function drawBuildingBase(x, y, selected) {
-  ctx.save();
-  ctx.fillStyle = selected ? "#d9f99d" : "#d8f6c6";
-  roundRect(x - 55, y + 32, 110, 50, 16);
-  ctx.fill();
-  ctx.lineWidth = selected ? 5 : 3;
-  ctx.strokeStyle = selected ? "#22c55e" : "#6ab85a";
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawBuildingIcon(b) {
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.font = "70px system-ui";
-  ctx.shadowColor = "rgba(0,0,0,.3)";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 6;
-  ctx.fillText(b.icon, b.x, b.y + 35);
-  ctx.restore();
-}
-
-function drawBuildingBubble(b) {
-  ctx.save();
-  const w = b.kind === "producer" ? 176 : 150;
-  const h = b.kind === "market" ? 84 : 74;
-  const x = b.x - w / 2;
-  const y = b.y - 116;
-
-  ctx.fillStyle = "rgba(23, 68, 26, .94)";
-  roundRect(x, y, w, h, 14);
-  ctx.fill();
-
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#b8f78f";
-  ctx.stroke();
-
-  ctx.fillStyle = "white";
-  ctx.textAlign = "center";
-  ctx.font = "bold 18px system-ui";
-  ctx.fillText(b.short.toUpperCase(), b.x, y + 25);
-
-  ctx.font = "bold 21px system-ui";
-  if (b.kind === "market") {
-    ctx.fillText(`Compra: ${getMarketPrice()} 🪙`, b.x, y + 58);
-  } else {
-    ctx.fillText(`${b.stock} / ${b.capacity}`, b.x, y + 56);
-  }
-  ctx.restore();
-}
-
-function drawVehicles() {
-  for (const v of state.vehicles) {
-    const a = getBuilding(v.from);
-    const b = getBuilding(v.to);
-    const x = lerp(a.x, b.x, smooth(v.t));
-    const y = lerp(a.y + 20, b.y + 20, smooth(v.t));
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.font = "34px system-ui";
-    ctx.textAlign = "center";
-    ctx.fillText(v.from === "farm" ? "🚜" : "🚚", 0, 10);
-    ctx.font = "22px system-ui";
-    ctx.fillText("🌽", 0, -18);
-    ctx.restore();
-  }
-}
-
-function drawFloatingTexts() {
-  for (const f of state.floatingTexts) {
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, f.life);
-    ctx.fillStyle = "white";
-    ctx.strokeStyle = "rgba(0,0,0,.45)";
-    ctx.lineWidth = 4;
-    ctx.font = "bold 24px system-ui";
-    ctx.textAlign = "center";
-    ctx.strokeText(f.text, f.x, f.y);
-    ctx.fillText(f.text, f.x, f.y);
-    ctx.restore();
-  }
-}
-
-function addFloat(text, x, y) {
-  state.floatingTexts.push({ text, x, y, life: 1 });
-}
-
-function showToast(text) {
-  const toast = document.getElementById("toast");
-  toast.textContent = text;
-  toast.classList.remove("hidden");
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.add("hidden"), 1100);
-}
-
-function getPointer(e) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (e.clientX - rect.left) * (world.w / rect.width),
-    y: (e.clientY - rect.top) * (world.h / rect.height)
-  };
-}
-
-function hitBuilding(x, y) {
-  return buildings.find(b => Math.hypot(x - b.x, y - b.y) < 75);
-}
-
-canvas.addEventListener("pointerdown", e => {
-  if (state.activeTab === "upgrades") return;
-
-  const p = getPointer(e);
-  const b = hitBuilding(p.x, p.y);
-
-  if (!b) {
-    state.selected = null;
+function spawnVehicle(fromId, toId) {
+  const to = getB(toId);
+  if (to.kind === "storage" && to.stock >= to.capacity) {
+    const from = getB(fromId);
+    if (from.stock < from.capacity) from.stock++;
     return;
   }
 
-  state.selected = b.id;
-
-  if (b.kind !== "market") {
-    state.drag = { from: b.id, x: p.x, y: p.y };
-    canvas.setPointerCapture(e.pointerId);
+  const count = state.vehicles.filter(v => v.from === fromId).length;
+  if (count >= maxVehicles()) {
+    const from = getB(fromId);
+    if (from.kind === "producer" && from.stock < from.capacity) from.stock++;
+    return;
   }
-});
 
-canvas.addEventListener("pointermove", e => {
-  if (!state.drag) return;
+  state.vehicles.push({ from: fromId, to: toId, t: 0, speed: vehicleSpeed() });
+}
+
+function tryDispatchDepot(toId) {
+  const depot = getB("depot");
+  if (depot.stock <= 0) return;
+  const count = state.vehicles.filter(v => v.from === "depot").length;
+  if (count >= maxVehicles()) return;
+  depot.stock--;
+  state.vehicles.push({ from: "depot", to: toId, t: 0, speed: vehicleSpeed() });
+}
+
+function gameLoop(now) {
+  const dt = Math.min((now - state.last) / 1000, 0.05);
+  state.last = now;
+  update(dt);
+  renderHud();
+  renderRoutes();
+  renderBuildings();
+  renderVehicles();
+  renderSelected();
+  requestAnimationFrame(gameLoop);
+}
+
+function buildingPointerDown(e) {
+  const id = e.currentTarget.dataset.id;
+  const b = getB(id);
+  state.selected = id;
+
+  if (state.activeTab !== "upgrades" && b.kind !== "market") {
+    const p = getPointer(e);
+    state.dragging = { from: id, x: p.x, y: p.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  renderAll();
+}
+
+window.addEventListener("pointermove", e => {
+  if (!state.dragging) return;
   const p = getPointer(e);
-  state.drag.x = p.x;
-  state.drag.y = p.y;
+  state.dragging.x = p.x;
+  state.dragging.y = p.y;
+  renderRoutes();
 });
 
-canvas.addEventListener("pointerup", e => {
-  if (!state.drag) return;
-
+window.addEventListener("pointerup", e => {
+  if (!state.dragging) return;
   const p = getPointer(e);
   const target = hitBuilding(p.x, p.y);
-  const from = getBuilding(state.drag.from);
+  const from = getB(state.dragging.from);
 
   if (target && target.id !== from.id && validRoute(from, target)) {
     state.routes = state.routes.filter(r => r.from !== from.id);
-    state.routes.push({ from: from.id, to: target.id, resource: "corn" });
-    showToast(`Ruta: ${from.short} → ${target.short}`);
+    state.routes.push({ from: from.id, to: target.id });
+    toast("Ruta: " + from.short + " → " + target.short);
     saveGame();
   } else {
-    showToast("Ruta no válida");
+    toast("Ruta no válida");
   }
 
-  state.drag = null;
+  state.dragging = null;
+  renderAll();
 });
+
+function getPointer(e) {
+  const rect = shell.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function hitBuilding(x, y) {
+  return buildings.find(b => Math.hypot(x - pxX(b.x), y - pxY(b.y)) < 80);
+}
 
 function validRoute(from, to) {
   if (from.id === "farm") return to.id === "depot" || to.id === "market";
@@ -721,28 +436,51 @@ function validRoute(from, to) {
   return false;
 }
 
-function getBuilding(id) {
-  return buildings.find(b => b.id === id);
+function setTab(tab) {
+  state.activeTab = tab;
+  for (const btn of document.querySelectorAll(".tab")) btn.classList.remove("active");
+
+  const ids = { market: "marketTab", routes: "routesTab", upgrades: "upgradesTab", storage: "storageTab" };
+  document.getElementById(ids[tab]).classList.add("active");
+
+  document.getElementById("upgradePanel").classList.toggle("hidden", tab !== "upgrades");
+  if (tab === "market") state.selected = "market";
+  if (tab === "storage") state.selected = "depot";
+  if (tab === "routes") toast("Arrastrá una ruta");
+  renderAll();
 }
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+document.getElementById("menuBtn").addEventListener("click", resetGame);
+document.getElementById("marketTab").addEventListener("click", () => setTab("market"));
+document.getElementById("routesTab").addEventListener("click", () => setTab("routes"));
+document.getElementById("upgradesTab").addEventListener("click", () => setTab("upgrades"));
+document.getElementById("storageTab").addEventListener("click", () => setTab("storage"));
+document.getElementById("closeUpgrades").addEventListener("click", () => setTab("market"));
+
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.classList.remove("hidden");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.add("hidden"), 1000);
 }
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
+function floatText(text, x, y) {
+  const el = document.createElement("div");
+  el.className = "float";
+  el.textContent = text;
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  effectsLayer.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
-function smooth(t) {
-  return t * t * (3 - 2 * t);
-}
+function lerp(a,b,t) { return a + (b-a)*t; }
+function smooth(t) { return t*t*(3-2*t); }
 
-renderUpgradePanel();
+window.addEventListener("resize", resize);
 setInterval(saveGame, 10000);
-requestAnimationFrame(loop);
+
+resize();
+renderAll();
+requestAnimationFrame(gameLoop);

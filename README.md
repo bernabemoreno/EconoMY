@@ -1,49 +1,14 @@
-# EconoMy 0.1
+# EconoMy 0.2.1 Fixed
 
-Prototipo funcional mobile-first.
+Versión corregida del prototipo mobile.
 
-## Mecánica actual
+Cambios:
+- El mapa se dibuja correctamente.
+- Los edificios ahora son elementos HTML, más estables en móvil.
+- Rutas arrastrables.
+- Vehículos animados.
+- Mejoras de producción, transporte, mercado y almacén.
+- Guardado local.
+- Cache busting en `game.js?v=021`.
 
-- Plantación de maíz.
-- Depósito.
-- Mercado.
-- Arrastrar rutas:
-  - Plantación → Depósito
-  - Plantación → Mercado
-  - Depósito → Mercado
-- Camioncitos animados.
-- Stock en edificios.
-- Venta automática en mercado.
-- Guardado local automático.
-- Preparado como PWA básica.
-
-## Cómo probar
-
-Abrir `index.html` en el navegador.
-
-## Cómo subir a GitHub Pages
-
-1. Crear un repositorio.
-2. Subir estos archivos.
-3. Ir a Settings > Pages.
-4. Elegir rama `main` y carpeta `/root`.
-5. Guardar.
-
-## Camino a Android / iOS
-
-Este proyecto puede convertirse a app móvil con:
-
-- PWA: instalable desde navegador.
-- Capacitor: genera proyecto Android e iOS usando la misma base web.
-
-Comandos futuros orientativos:
-
-```bash
-npm create vite@latest economy
-npm install @capacitor/core @capacitor/cli
-npx cap init EconoMy com.economy.game
-npx cap add android
-npx cap add ios
-```
-
-Para iOS hace falta una Mac con Xcode.
+Si GitHub Pages sigue mostrando la versión vieja, borrar caché o abrir en modo incógnito.
